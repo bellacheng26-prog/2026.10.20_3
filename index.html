@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>答題拼圖：雨過天晴</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft JhengHei", sans-serif;
+      user-select: none;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #ebeff3;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* 頂部導覽列 */
+    header {
+      width: 100%;
+      max-width: 1100px;
+      padding: 20px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .title-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .sub-title {
+      font-size: 11px;
+      color: #888;
+      letter-spacing: 1px;
+      font-weight: bold;
+    }
+    .main-title {
+      font-size: 24px;
+      font-weight: bold;
+      color: #2c3e50;
+      margin-top: 2px;
+    }
+    .stats-group {
+      display: flex;
+      gap: 12px;
+    }
+    .stat-box {
+      background: #fff;
+      padding: 6px 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: #7f8c8d;
+    }
+    .stat-value {
+      font-size: 18px;
+      font-weight: bold;
+      color: #2c3e50;
+    }
+
+    /* 提示文字 */
+    .hint-text {
+      font-size: 13px;
+      color: #7f8c8d;
+      margin-bottom: 20px;
+    }
+
+    /* 遊戲主要容器 (左側拼圖板，右側備選區) */
+    .game-container {
+      width: 100%;
+      max-width: 1100px;
+      display: flex;
+      justify-content: space-around;
+      align-items: flex-start;
+      padding: 0 20px 40px;
+    }
+
+    /* 左側拼圖底板 */
+    .board-container {
+      width: 456px;
+      height: 306px;
+      background: #f8fafc;
+      border: 3px dashed #cbd5e1;
+      border-radius: 12px;
+      position: relative;
+      box-shadow: inset 0 2px 8px rgba(0,0,0,0.03);
+    }
+    .board-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 150px);
+      grid-template-rows: repeat(3, 100px);
+      width: 100%;
+      height: 100%;
+    }
+    .board-slot {
+      border: 1px dashed #cbd5e1;
+      position: relative;
+    }
+
+    /* 右側拼圖區 */
+    .pieces-pool {
+      width: 500px;
+      min-height: 330px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      position: relative;
+    }
+
+    /* 拼圖塊本體 */
+    .puzzle-piece {
+      width: 150px;
+      height: 100px;
+      position: relative;
+      cursor: pointer;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .puzzle-piece.locked {
+      background: #334155;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #fff;
+    }
+    .puzzle-piece.locked .question-mark {
+      font-size: 32px;
+      font-weight: bold;
+    }
+    .puzzle-piece.locked .piece-sub {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+    .puzzle-piece.unlocked {
+      cursor: grab;
+      background-size: 440px 320px;
+    }
+    .puzzle-piece.dragging {
+      cursor: grabbing;
+      z-index: 1000 !important;
+      opacity: 0.9;
+      transform: scale(1.05);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.25);
+    }
+    .puzzle-piece.snapped {
+      position: absolute;
+      box-shadow: none;
+      cursor: default;
+    }
+
+    /* 彈出視窗（答題 Dialog） */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+      backdrop-filter: blur(2px);
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal-card {
+      background: #fff;
+      width: 480px;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      position: relative;
+      animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes popIn {
+      from { transform: scale(0.85); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .modal-title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .modal-badge {
+      font-size: 12px;
+      color: #e67e22;
+      font-weight: bold;
+    }
+    .modal-sub {
+      font-size: 11px;
+      color: #95a5a6;
+    }
+    .btn-later {
+      background: #f1f5f9;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      color: #64748b;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .question-prompt {
+      font-size: 18px;
+      font-weight: bold;
+      color: #1e293b;
+      margin-bottom: 20px;
+    }
+    .options-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .option-btn {
+      background: #fff;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #334155;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+    .option-btn:hover {
+      border-color: #3b82f6;
+      background: #eff6ff;
+    }
+    .option-idx {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #1e293b;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 12px;
+      margin-right: 12px;
+      font-weight: bold;
+    }
+    .modal-footer-hint {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    /* 結算彈窗 */
+    .result-card {
+      text-align: center;
+    }
+    .result-title {
+      font-size: 24px;
+      font-weight: bold;
+      color: #2c3e50;
+      margin-bottom: 10px;
+    }
+    .result-score {
+      font-size: 18px;
+      color: #e67e22;
+      margin-bottom: 20px;
+      font-weight: bold;
+    }
+    .restart-btn {
+      background: #e67e22;
+      color: #fff;
+      border: none;
+      padding: 12px 36px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 25px;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 頂部資訊列 -->
+  <header>
+    <div class="title-group">
+      <span class="sub-title">PUZZLE QUIZ</span>
+      <span class="main-title">答題拼圖：雨過天晴</span>
+    </div>
+    <div class="stats-group">
+      <div class="stat-box">
+        <span class="stat-label">拼好</span>
+        <span class="stat-value" id="snapped-count">0/9</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-label">答對</span>
+        <span class="stat-value" id="correct-count">0 題</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-label">時間</span>
+        <span class="stat-value" id="timer-display">00:00</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="hint-text" id="top-hint">點「?」拼圖回答問題，答完就能拼</div>
+
+  <!-- 遊戲主要區域 -->
+  <div class="game-container">
+    <!-- 左側拼圖底板 -->
+    <div class="board-container" id="board-container">
+      <div class="board-grid">
+        <div class="board-slot" data-index="0"></div>
+        <div class="board-slot" data-index="1"></div>
+        <div class="board-slot" data-index="2"></div>
+        <div class="board-slot" data-index="3"></div>
+        <div class="board-slot" data-index="4"></div>
+        <div class="board-slot" data-index="5"></div>
+        <div class="board-slot" data-index="6"></div>
+        <div class="board-slot" data-index="7"></div>
+        <div class="board-slot" data-index="8"></div>
+      </div>
+    </div>
+
+    <!-- 右側拼圖池 -->
+    <div class="pieces-pool" id="pieces-pool"></div>
+  </div>
+
+  <!-- 答題彈窗 Modal -->
+  <div class="modal-overlay" id="quiz-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="modal-badge" id="modal-q-num">拼圖題目 第 1/9 題</span>
+        </div>
+        <button class="btn-later" onclick="closeQuizModal()">稍後</button>
+      </div>
+      <div class="question-prompt" id="modal-q-title">想知道今天幾度，要用什麼工具？</div>
+      <div class="options-list" id="modal-options"></div>
+      <div class="modal-footer-hint">點選答案，或按鍵盤 1~3</div>
+    </div>
+  </div>
+
+  <!-- 結算彈窗 Modal -->
+  <div class="modal-overlay" id="result-modal">
+    <div class="modal-card result-card">
+      <div class="result-title">🎉 恭喜完成「雨過天晴」拼圖！</div>
+      <div class="result-score" id="result-score-text">答對 9 / 9 題 | 耗時 00:35</div>
+      <button class="restart-btn" onclick="initGame()">再玩一次</button>
+    </div>
+  </div>
+
+  <script src="sketch.js"></script>
+</body>
+</html>
